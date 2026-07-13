@@ -563,34 +563,41 @@ _MONTH_NAMES = {
 
 def _detail_f35(value: str) -> str:
     """
-    DE 35 (Track 2 Data): <PAN>=<YYMM expiration><3-digit service code><discretionary data>
-    e.g. "37533171******5697=3102226*************" ->
+    DE 35 (Track 2 Data): <PAN><sep><YYMM expiration><3-digit service code><discretionary data>
+    where <sep> is the field separator, either '=' (the usual ISO 7813 form)
+    or 'D' (the alternate form some issuers/networks use), e.g.
+      "37533171******5697=3102226*************" ->
+      "37533171******5697D3102226*************" ->
       PAN                : 37533171******5697  (masked)
-      Field Separator    : =
+      Field Separator    : = (or D)
       Expiration (YYMM)  : 3102  -> February 2031
       Service Code       : 226
       Discretionary Data : *************
     """
     raw = value or ""
-    if "=" not in raw:
-        return (f"Track 2 Data - no field separator ('=') found in '{raw}'; cannot split PAN from "
-                "expiration/service code/discretionary data.")
+    sep_char, sep_index = None, None
+    for i, ch in enumerate(raw):
+        if ch in ("=", "D"):
+            sep_char, sep_index = ch, i
+            break
 
-    pan, rest = raw.split("=", 1)
+    if sep_index is None:
+        return (f"Track 2 Data - no field separator ('=' or 'D') found in '{raw}'; cannot split PAN "
+                "from expiration/service code/discretionary data.")
+
+    pan, rest = raw[:sep_index], raw[sep_index + 1:]
     parts = [
         f"Primary Account Number (PAN) = {pan} (masked, the cardholder's account number)",
-        "Field Separator = '=' (splits the PAN from expiration/service code/discretionary data)",
+        f"Field Separator = '{sep_char}' (splits the PAN from expiration/service code/discretionary data)",
     ]
     if len(rest) < 4:
         parts.append(f"Remainder too short ({len(rest)} char(s)) to contain a 4-digit expiration "
                       f"date; got '{rest}'.")
         return " | ".join(parts)
-
     expiry, tail = rest[:4], rest[4:]
     yy, mm = expiry[:2], expiry[2:4]
     month_label = _MONTH_NAMES.get(mm, f"month {mm}")
     parts.append(f"Expiration Date (YYMM) = {expiry}: {month_label} 20{yy}")
-
     service_code, discretionary = tail[:3], tail[3:]
     if service_code:
         parts.append(f"Service Code = {service_code} (interoperability/authorization rules for "
@@ -599,7 +606,6 @@ def _detail_f35(value: str) -> str:
         parts.append(f"Discretionary Data = {discretionary} (masked validation data payload, e.g. "
                       "CVV1/CVC1)")
     return " | ".join(parts)
-
 
 def _detail_f37(value: str) -> str:
     """
