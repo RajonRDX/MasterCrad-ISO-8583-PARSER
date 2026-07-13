@@ -97,6 +97,22 @@ try:
 except ImportError:
     CURRENCY_DISPLAY = {}
 
+# DE 48 (Additional Data - Private Use) general subelement decoder, covering
+# all 99 subelements (01-99) at a glossary + value-table level. Used as a
+# fallback for any F48.NN subelement that doesn't already have a dedicated,
+# spec-confirmed positional decomposition function in DETAIL_FUNCS below
+# (F48.61, F48.87, F48.92, F48.42 keep using those more granular functions
+# instead, since they were confirmed against the DMS Guide independently).
+# NOTE: unlike the tables above, this file's contents have not been
+# independently re-verified against the DMS Guide in this codebase - treat
+# DE48_SUBELEMENT_GLOSSARY / decode_de48_subelement() output as provisional
+# and confirm against the spec or a live sample before relying on it.
+try:
+    from mastercard_de48_details import decode_de48_subelement, DE48_SUBELEMENT_GLOSSARY
+except ImportError:
+    decode_de48_subelement = None
+    DE48_SUBELEMENT_GLOSSARY = {}
+
 # ---------------------------------------------------------------------------
 # Simple code -> meaning tables
 # ---------------------------------------------------------------------------
@@ -826,14 +842,18 @@ def get_value_detail(label: str, value: str) -> str:
       1. A specific DETAIL_FUNCS entry for this exact label (enumerated
          code lookups / positional decompositions).
       2. F55.<tag> generic EMV pass-through note.
-      3. A direct VALUE_TABLES lookup for this exact label.
-      4. FIELD_GLOSSARY structural text for this exact label (e.g. 'F61').
-      5. FIELD_GLOSSARY structural text for the PARENT field of a
+      3. F48.<NN> general subelement decode via mastercard_de48_details.py
+         (covers subelements other than 61/87/92/42, which use their own
+         DETAIL_FUNCS entries above - see that module's docstring for
+         coverage/verification status).
+      4. A direct VALUE_TABLES lookup for this exact label.
+      5. FIELD_GLOSSARY structural text for this exact label (e.g. 'F61').
+      6. FIELD_GLOSSARY structural text for the PARENT field of a
          subfield/subelement label (e.g. 'F43.1' falls back to 'F43''s
          glossary text, annotated to make clear it's the parent field's
          general definition rather than something specific to the
          subfield).
-      6. Honest "not covered yet" fallback.
+      7. Honest "not covered yet" fallback.
     """
     if label in DETAIL_FUNCS:
         try:
@@ -844,6 +864,14 @@ def get_value_detail(label: str, value: str) -> str:
     if label.startswith("F55.") and len(label.split(".")) == 2:
         tag = label.split(".", 1)[1]
         return _detail_f55_generic(tag, value)
+
+    if label.startswith("F48.") and decode_de48_subelement is not None:
+        se_tag = label.split(".", 1)[1]
+        if se_tag in DE48_SUBELEMENT_GLOSSARY:
+            try:
+                return decode_de48_subelement(se_tag, value)
+            except Exception as e:
+                return f"<DE48 subelement decode error: {e}>"
 
     if label in _DIRECT_LOOKUP_LABELS:
         return _lookup(label, value.strip(), label)
