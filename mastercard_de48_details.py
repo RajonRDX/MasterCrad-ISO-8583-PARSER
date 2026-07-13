@@ -74,6 +74,7 @@ DE48_SUBELEMENT_GLOSSARY = {
     "76": "Mastercard Digital Enablement Service (MDES) Token Data [Variable]",
     "77": "Dynamic Currency Conversion (DCC) Indicator [Variable, Struct]",
     "78": "Token Response Information / Assurance Level [Fixed, 2 char]",
+    "80": "PIN Service Code [Fixed, 2 char]",
     "82": "Address Verification Service (AVS) Request [Variable]",
     "83": "Address Verification Service (AVS) Response [Fixed, 1 char]",
     "84": "Merchant Advice Code [Fixed, 2 char]",
@@ -244,6 +245,13 @@ DE48_VALUE_TABLES = {
         "00": "Unspecified assurance status", "01": "Level 1: Low-assurance baseline token authentication",
         "02": "Level 2: Mid-assurance credential identity verified", "03": "Level 3: High-assurance biometrically linked token verification"
     },
+    "80": {
+        "PD": "The Dual Message Authorization System dropped the PIN (Mastercard Use Only for Credit Transactions with PIN)",
+        "PV": "The Dual Message Authorization System verified the PIN.",
+        "TV": "The Dual Message Authorization System translated the PIN for issuer verification.",
+        "PI": "The Dual Message Authorization System was unable to verify the PIN.",
+        "TI": "The Dual Message Authorization System was unable to translate the PIN."
+    },
     "83": {
         "A": "Address matches, ZIP code does not match.", "N": "Neither address nor ZIP code matches.",
         "R": "Retry - Issuer system unavailable or timed out.", "S": "AVS not supported by issuer for this card product.",
@@ -394,6 +402,12 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
             validation_err = " [Warning: Expected length exactly 2]"
         desc = DE48_VALUE_TABLES["78.POS1"].get(clean_val, f"Custom Level ({clean_val})")
         return f"{tag_name} -> Assurance Profile: {desc}{validation_err}"
+
+    if se_tag == "80":
+        if len(clean_val) != 2:
+            validation_err = " [Warning: Expected length exactly 2]"
+        meaning = DE48_VALUE_TABLES["80"].get(clean_val, "Unknown PIN verification handling configuration")
+        return f"{tag_name} -> Action context: {meaning}{validation_err}"
 
     if se_tag == "90":
         return f"{tag_name} -> Co-routing Switch Metadata Segment: `{clean_val}`"
