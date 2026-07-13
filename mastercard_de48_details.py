@@ -67,7 +67,7 @@ DE48_SUBELEMENT_GLOSSARY = {
     "62": "Real-time Settlement Indicator [Fixed, 2 char]",
     "63": "Trace ID / Network Reference Data [Fixed, 15 char]",
     "66": "Authentication Data (Program Protocol & DS Transaction ID) [Variable]",
-    "71": "On-behalf Services Result Flags [Fixed, 6 char]",
+    "71": "On-behalf Services Result Flags [Variable Repeating, 3-char sets]",
     "72": "Issuer Chip Authentication [Variable]",
     "74": "Payment Account Reference (PAR) [Fixed, 29 char]",
     "75": "Token Cryptogram Validation Results [Fixed, 1 char]",
@@ -223,11 +223,148 @@ DE48_VALUE_TABLES = {
         "R": "Intraregional real-time payment", "X": "Interregional real-time payment",
         "Z": "Other custom real-time framework", "N": "No participation"
     },
-    "71.POS1": {
-        "0": "PIN verification not modified by network", "1": "PIN block processed via Mastercard On-Behalf rules"
+    
+    # Exhaustive On-behalf Services (OBS) Registry defined in spec page 624-634
+    "71.SERVICES": {
+        "01": "Chip to Magnetic Stripe Conversion Service",
+        "02": "M/Chip Cryptogram Pre-validation Service",
+        "03": "M/Chip Cryptogram Validation in Stand-In Processing",
+        "04": "M/Chip Cryptogram Regeneration Service",
+        "05": "Mastercard Identity Check AAV Verification Service",
+        "06": "Mastercard Identity Check AAV Verification in Stand-In Processing",
+        "08": "Online PIN Pre-validation (Europe Only)",
+        "09": "Online PIN Validation in Stand-In (Europe only)",
+        "10": "CVC 1 Validation Stand-In Service",
+        "11": "CVC 1 Pre-Validation Service",
+        "14": "Contactless Mapping Service",
+        "15": "Dynamic CVC 3 Pre-validation (with or without Contactless Mapping Service)",
+        "16": "Dynamic CVC 3 Validation in Stand-In Processing",
+        "17": "In Control Virtual Card Service",
+        "18": "Fraud Scoring Service",
+        "20": "In Control RCN Spend Control Service",
+        "25": "Account Data Compromise Information",
+        "26": "Point-of-Interaction Service",
+        "31": "Chip CVC to CVC 1 Conversion Service (CVC 1 Key/Decision Matrix Only)",
+        "32": "Chip CVC to CVC 1 Conversion Service (Separate Keys/Decision Matrices)",
+        "33": "Send and other transactions blocking service",
+        "37": "Mastercard Merchant Presented QR Blocking Service",
+        "50": "MDES PAN Mapping service",
+        "51": "MDES Pre-Validation Service for Secure Element tokens (ICC or DSRP data)",
+        "52": "MDES Pre-Validation Service for Secure Element tokens (CVC3 data)",
+        "54": "Mastercard Digital Enablement Service Digital Payment Data Validation Service",
+        "55": "Merchant Validation Service",
+        "61": "MDES Pre-Validation Service for Cloud and Static tokens (ICC, DSRP, or DTVC data)",
+        "62": "MDES Pre-Validation Service for Cloud tokens (CVC3 data)",
+        "71": "Token Service Provider Cloud Based Payments Chip Validation Service in Stand-In"
     },
-    "71.POS2": {
-        "0": "CVC validation not modified", "1": "CVC checked via Mastercard On-Behalf services"
+    
+    # Specific matrix breakdowns mapped directly per service values
+    "71.OBS01": {
+        "C": "Conversion of M/Chip transaction to magstripe completed from PAN Entry Mode 05 or 79",
+        "M": "Conversion of M/Chip fallback transaction to magstripe completed from PAN Entry Mode 80",
+        "S": "Conversion of M/Chip transaction to magstripe completed from PAN Entry Mode 07"
+    },
+    "71.OBS02_03_51": {
+        "A": "Valid Application Cryptogram (AC); ATC outside allowed range",
+        "E": "Valid Application Cryptogram; ATC Replay", "F": "Format Error",
+        "G": "Application Cryptogram is valid but not an ARQC nor a TC, status of TVR/CVR unknown",
+        "I": "Invalid Cryptogram", "K": "No matching key file for this PAN, PAN expiry date and KDI combination",
+        "T": "Valid ARQC/TC and ATC; TVR/CVR invalid", "U": "Unable to process", "V": "Valid",
+        "X": "Security platform time out", "Z": "Security platform processing error"
+    },
+    "71.OBS04": {"C": "Regeneration of the M/Chip cryptogram was completed"},
+    "71.OBS05_06": {
+        "A": "DS Txn ID not provided; AAV, amount and currency verified",
+        "B": "DS Txn ID not provided; AAV and currency verified; amount 0-20% different",
+        "C": "DS Txn ID not provided; AAV and currency verified; amount greater than 20% different",
+        "D": "DS Transaction ID does not match with PAN and SPA2 AAV within the authentication record",
+        "E": "Format Error; AAV incorrectly formatted, failed authentication, or previously used in approved auth",
+        "F": "Failed MAC key validation; Dynamic Linking validation not provided",
+        "I": "Invalid AAV; Dynamic Linking unable to find matching authentication (expired, used, or non-DS)",
+        "K": "No matching key file for PAN. SPA2 AAV provided not generated by Mastercard Identity Check",
+        "M": "Monetary Currency mismatch between authorization and authentication",
+        "P": "Passed MAC key Validation; Dynamic Linking validation not provided",
+        "S": "DS Txn ID present; AAV and currency verified; amount 0-20% different",
+        "T": "DS Txn ID present; AAV and currency verified; amount greater than 20% different",
+        "U": "Unable to process", "V": "Valid",
+        "X": "Security platform time out or Authentication Challenge (Results Request) not received yet",
+        "Z": "Security platform processing error or Authentication Response not received yet"
+    },
+    "71.OBS08_09": {
+        "I": "Invalid PIN", "P": "Mandatory PVV not on file", "R": "PIN retry exceeded (invalid PIN)",
+        "U": "Unable to process", "V": "Valid"
+    },
+    "71.OBS10_11": {
+        "I": "Invalid CVC 1", "K": "No matching key file for this PAN/Expiry date combination",
+        "U": "Unable to process", "V": "Valid"
+    },
+    "71.OBS14": {"C": "Conversion of contactless account number to PAN was completed", "I": "Invalid", "U": "Unable to process"},
+    "71.OBS15_16_62": {
+        "A": "ATC outside allowed range (dynamic value profile)", "E": "CVC 3 ATC Replay", "F": "Format Error",
+        "H": "Invalid Time Validation", "I": "Invalid CVC 3", "K": "No matching key file for this PAN, PAN expiry date, and KDI combination",
+        "N": "Unpredictable Number Mismatch / Length Indicator Mismatch", "U": "Unable to process", "V": "Valid",
+        "X": "Security platform time out", "Z": "Security platform system error"
+    },
+    "71.OBS17": {
+        "A": "Virtual Card Number (expiration date does not match)", "B": "Virtual Card Number (expiration date expired)",
+        "C": "Virtual Card Number Virtual CVC 2 does not match", "D": "In Control Validity Period Limit",
+        "E": "In Control Transaction Amount Limit Check", "F": "In Control Cumulative Amount Limit Check",
+        "G": "In Control Transaction Number Usage", "H": "In Control Merchant ID Limit",
+        "I": "In Control Invalid Virtual Card Number—Real Card Number mapping relationship", "J": "In Control MCC Limit",
+        "K": "In Control Database Status Bad", "L": "In Control Geographic Restriction",
+        "M": "In Control Transaction Type Restriction", "P": "In Control Transaction Time/Date Restriction",
+        "U": "Unable to process", "V": "Valid", "Y": "In Control Credit Block"
+    },
+    "71.OBS18": {"C": "Fraud Scoring Service was performed successfully", "U": "Fraud Scoring Service was not performed successfully"},
+    "71.OBS20": {
+        "D": "In Control Validity Period Limit", "E": "In Control Transaction Amount Limit Check",
+        "F": "In Control Cumulative Amount Limit Check", "G": "In Control Transaction Number Usage",
+        "H": "In Control Merchant ID Limit", "J": "In Control MCC Limit", "K": "In Control Database Status Bad",
+        "L": "In Control Geographic Restriction", "M": "In Control Transaction Type Restriction",
+        "P": "In Control Transaction Time/Date Restriction", "U": "Unable to process", "V": "Valid"
+    },
+    "71.OBS25": {"Y": "Compromised Event Data Found", "N": "Compromised Event Data Not Found", "U": "Unable to process"},
+    "71.OBS26": {"C": "Enrichment completed for Installments", "F": "PAN does not qualify for installments", "U": "Unable to Process"},
+    "71.OBS31_32": {
+        "C": "Chip CVC Validated Successfully; Conversion performed successfully", "F": "Track Data Formatted Incorrectly",
+        "I": "Chip CVC Invalid; Conversion not performed",
+        "K": "Key Record / Chip CVC Key Record not found for Account Range / Expiry Date combination",
+        "L": "Issuer CVC 1 Key Record not Found for Account Range / Expiry Date combination",
+        "M": "Issuer Chip CVC Key Record not Found for Account Range / Expiry Date combination", "U": "Unable to process"
+    },
+    "71.OBS33": {
+        "A": "Send issuer blocking: Limit not allowed for TTI", "B": "Send issuer blocking: Merchant not allowed for TTI",
+        "D": "Send issuer blocking: Country not allowed for TTI", "E": "Send issuer blocking: Domestic activity only allowed for TTI",
+        "F": "Send issuer blocking: Sanctions Score limit exceeded for TTI", "G": "Send Mastercard blocking: Single transaction amount limit exceeded for Payment Txn",
+        "H": "Mastercard blocking: General miscoding", "I": "Send Mastercard blocking: Reserved for future use",
+        "J": "Send Mastercard blocking: Transaction Count limit exceeded", "K": "Send Mastercard blocking: Accumulated transaction amount limit exceeded",
+        "L": "Send issuer blocking: Transaction Count exceeded for TTI", "M": "Send issuer blocking: Aggregate transaction amount limit exceeded for TTI",
+        "N": "Send issuer monitoring: Transaction Count exceeded for TTI", "O": "Send issuer monitoring: Aggregate transaction amount limit exceeded for TTI",
+        "P": "Send issuer monitoring: Transaction amount limit exceeded for TTI", "Q": "Send issuer monitoring: Sanctions Score exceeded",
+        "R": "Send issuer blocking: Invalid Card", "S": "Send Mastercard blocking: Product code invalid for TTI or use case",
+        "T": "Send Mastercard blocking: Single transaction amount limit exceeded for Funding Txn", "U": "Unable to process",
+        "V": "Valid", "W": "Send Mastercard blocking: Geographical restriction", "X": "Send Mastercard blocking: Reserved",
+        "Y": "Send Mastercard blocking: Data quality controls"
+    },
+    "71.OBS37": {
+        "D": "QR Blocking - Transaction Amount Limit Exceeded",
+        "E": "QR Blocking - Cumulative Transaction Amount Or Count Limit Exceeded",
+        "F": "QR Blocking - Domestic Activity Only", "U": "Unable to Process", "V": "Valid"
+    },
+    "71.OBS50": {"C": "Conversion of Token to PAN completed successfully", "F": "Format Error", "I": "Invalid Token", "U": "Unable to process"},
+    "71.OBS54": {
+        "A": "DE 4 transaction amount <= approximate amount in cryptogram",
+        "B": "DE 4 transaction amount greater than approximate amount by 0% to 19.99%",
+        "C": "DE 4 transaction amount greater than approximate amount by 20% or more",
+        "D": "DE 4 transaction amount is not zero and approximate amount in cryptogram is zero"
+    },
+    "71.OBS55": {"M": "Submitted merchant data matches Mastercard data", "N": "Submitted merchant data is not a match", "U": "Unable to Process"},
+    "71.OBS61_71": {
+        "D": "ATC Invalid - Not in list of currently active Single-Use Keys", "E": "ATC Replay", "F": "Format Error",
+        "I": "Invalid MD AC and UMD AC", "K": "No matching key file for this PAN, PAN expiry date and KDI combination",
+        "L": "Invalid MD AC; Valid UMD AC", "M": "Valid MD AC; Invalid UMD AC (Mobile PIN Try Counter Max Reached, Token Suspended)",
+        "P": "Valid MD AC; Invalid UMD AC (Invalid Mobile PIN)", "T": "Invalid TVR/CVR", "U": "Unable to process",
+        "V": "Valid", "X": "Security platform time out", "Z": "Security platform system error"
     },
     "75": {
         "0": "Cryptogram Validation Successful", "1": "Cryptogram Verification Failed / Non-match", "2": "Not Checked / Validation Hub Offline"
@@ -243,7 +380,7 @@ DE48_VALUE_TABLES = {
         "02": "Level 2: Mid-assurance credential identity verified", "03": "Level 3: High-assurance biometrically linked token verification"
     },
     "80": {
-        "PD": "The Dual Message Authorization System dropped the PIN (Mastercard Use Only for Credit Transactions with PIN)",
+        "PD": "The Dual Message Authorization System dropped the PIN (Credit Transactions with PIN)",
         "PV": "The Dual Message Authorization System verified the PIN.",
         "TV": "The Dual Message Authorization System translated the PIN for issuer verification.",
         "PI": "The Dual Message Authorization System was unable to verify the PIN.",
@@ -384,13 +521,69 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         return f"{tag_name}: `{clean_val}`"
 
     if se_tag == "71":
-        if len(clean_val) != 6:
-            validation_err = " [Warning: Expected length exactly 6]"
-        if len(clean_val) >= 2:
-            o1 = DE48_VALUE_TABLES["71.POS1"].get(clean_val[0], "Normal PIN Processing")
-            o2 = DE48_VALUE_TABLES["71.POS2"].get(clean_val[1], "Normal CVC Validation")
-            return f"{tag_name} -> On-behalf Actions -> PIN Strategy: {o1} | CVC Evaluation: {o2}{validation_err}"
-        return f"{tag_name}: `{clean_val}`{validation_err}"
+        if len(clean_val) % 3 != 0 or len(clean_val) == 0:
+            validation_err = " [Warning: Subelement 71 layout must be a repeating series of 3-char blocks]"
+        
+        parsed_services = []
+        # Chunking into 3-character sets (Subfield 1 = 2 chars, Subfield 2 = 1 char)
+        for i in range(0, len(clean_val), 3):
+            block = clean_val[i:i+3]
+            if len(block) < 3:
+                parsed_services.append(f"Malformed block fragment: `{block}`")
+                continue
+            
+            svc_code = block[:2]
+            res_code = block[2]
+            svc_desc = DE48_VALUE_TABLES["71.SERVICES"].get(svc_code, f"Unknown On-behalf Service '{svc_code}'")
+            
+            # Select target matrix depending on service mapping parameters
+            if svc_code == "01":
+                res_desc = DE48_VALUE_TABLES["71.OBS01"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("02", "03", "51"):
+                res_desc = DE48_VALUE_TABLES["71.OBS02_03_51"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "04":
+                res_desc = DE48_VALUE_TABLES["71.OBS04"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("05", "06"):
+                res_desc = DE48_VALUE_TABLES["71.OBS05_06"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("08", "09"):
+                res_desc = DE48_VALUE_TABLES["71.OBS08_09"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("10", "11"):
+                res_desc = DE48_VALUE_TABLES["71.OBS10_11"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "14":
+                res_desc = DE48_VALUE_TABLES["71.OBS14"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("15", "16", "62"):
+                res_desc = DE48_VALUE_TABLES["71.OBS15_16_62"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "17":
+                res_desc = DE48_VALUE_TABLES["71.OBS17"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "18":
+                res_desc = DE48_VALUE_TABLES["71.OBS18"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "20":
+                res_desc = DE48_VALUE_TABLES["71.OBS20"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "25":
+                res_desc = DE48_VALUE_TABLES["71.OBS25"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "26":
+                res_desc = DE48_VALUE_TABLES["71.OBS26"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("31", "32"):
+                res_desc = DE48_VALUE_TABLES["71.OBS31_32"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "33":
+                res_desc = DE48_VALUE_TABLES["71.OBS33"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "37":
+                res_desc = DE48_VALUE_TABLES["71.OBS37"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "50":
+                res_desc = DE48_VALUE_TABLES["71.OBS50"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "54":
+                res_desc = DE48_VALUE_TABLES["71.OBS54"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code == "55":
+                res_desc = DE48_VALUE_TABLES["71.OBS55"].get(res_code, f"Unknown Code '{res_code}'")
+            elif svc_code in ("61", "71"):
+                res_desc = DE48_VALUE_TABLES["71.OBS61_71"].get(res_code, f"Unknown Code '{res_code}'")
+            else:
+                res_desc = f"Result Flag '{res_code}'"
+                
+            parsed_services.append(f"[{svc_desc} -> Result: {res_desc}]")
+            
+        services_summary = " | ".join(parsed_services)
+        return f"{tag_name} -> {services_summary}{validation_err}"
 
     if se_tag == "76":
         return f"{tag_name} -> MDES Ecosystem Real PAN Virtual Identifier Data Vault Reference: `{clean_val}`"
