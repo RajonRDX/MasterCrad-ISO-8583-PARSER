@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#v2
 """
 mastercard_iso8583_parser.py
 =============================
@@ -296,6 +297,8 @@ FIELD_DEFS = {
     19: {"type": "an", "len": 3},                               # Acquiring inst country code
     22: {"type": "an", "len": 3},                               # POS entry mode
     23: {"type": "an", "len": 3},                               # Card sequence number
+    26: {"type": "an", "len": 2},                               # POS PIN Capture Code
+    28: {"type": "special_28"},                                 # Amount, Transaction Fee
     32: {"type": "llvar"},                                      # Acquiring inst ID code
     33: {"type": "llvar"},                                      # Forwarding inst ID code
     35: {"type": "llvar"},                                      # Track 2 data (mask/sep chars already literal EBCDIC)
@@ -305,16 +308,41 @@ FIELD_DEFS = {
     41: {"type": "an", "len": 8},                               # Card acceptor terminal ID
     42: {"type": "an", "len": 15},                              # Card acceptor ID code
     43: {"type": "special_43"},                                 # Card acceptor name/location (positional)
+    44: {"type": "llvar"},                                      # Additional Response Data
     48: {"type": "special_48"},                                 # Additional Data - Private
     49: {"type": "an", "len": 3},                               # Currency code, transaction
     50: {"type": "an", "len": 3},                               # Currency code, reconciliation
     51: {"type": "an", "len": 3},                               # Currency code, cardholder billing
     52: {"type": "pin"},                                        # PIN data
+    54: {"type": "special_54"},                                 # Additional Amounts
     55: {"type": "special_55"},                                 # ICC / EMV data
+    56: {"type": "lllvar"},                                     # Payment Account Data (PAR)
     61: {"type": "lllvar"},                                     # POS Data (raw pass-through - unconfirmed subfields)
+    62: {"type": "lllvar"},                                     # Intermediate Network Facility (INF) Data
     63: {"type": "lllvar"},                                     # Private/network reference (raw pass-through)
+    67: {"type": "an", "len": 2},                               # Extended Payment Code
     90: {"type": "special_90"},                                 # Original Data Elements (positional)
+    94: {"type": "special_94"},                                 # Service Indicator
+    95: {"type": "special_95"},                                 # Replacement Amounts
+    96: {"type": "an", "len": 8},                               # Message Security Code
+    102: {"type": "llvar"},                                     # Account ID 1
+    103: {"type": "llvar"},                                     # Account ID 2
+    104: {"type": "special_104"},                               # Digital Payment Data
+    105: {"type": "special_105"},                               # Multi-Use Transaction Identification Data
+    106: {"type": "special_106"},                               # Fleet Service Data
+    108: {"type": "special_108"},                               # Additional Transaction Reference Data
+    110: {"type": "special_110"},                               # Additional Data-2 / Encryption Data
+    112: {"type": "special_112"},                               # Additional Data (National Use)
+    117: {"type": "special_117"},                               # Additional Transaction Reference Data 2
+    118: {"type": "special_118"},                               # Additional Transaction Reference Data 3
+    119: {"type": "special_119"},                               # Additional Data: Private Use 2
+    120: {"type": "special_120"},                               # Record Data
+    121: {"type": "llvar"},                                     # Authorizing Agent ID Code
     122: {"type": "special_122"},                               # Additional Private Data - National (dataset)
+    123: {"type": "lllvar"},                                    # Receipt Free Text
+    124: {"type": "special_124"},                               # Member-Defined Data
+    125: {"type": "pin"},                                       # New PIN Data (8 bytes, masked)
+    127: {"type": "lllvar"},                                    # Private Data (customer use)
 }
 
 # F43 (Card Acceptor Name/Location) - fixed 40 chars, positional subfields.
@@ -323,9 +351,9 @@ FIELD_DEFS = {
 # CHUNARUGHT FT C/HABIGANJ/BGD, and AROGGA LIMITED/DHAKA/BGD).
 FIELD43_SUBFIELDS = [
     (1, "Card Acceptor Name", 22),
-    (2, "Separator (unconfirmed use)", 1),
+    (2, "Space Separator", 1),
     (3, "Card Acceptor City", 13),
-    (4, "Separator (unconfirmed use)", 1),
+    (4, "Space Separator", 1),
     (5, "Card Acceptor Country Code", 3),
 ]
 
@@ -339,6 +367,13 @@ FIELD90_SUBFIELDS = [
     (3, "Original Transmission Date and Time", 10),
     (4, "Original Amount, Transaction", 11),
     (5, "Reserved / unconfirmed", 11),
+]
+
+# F94 (Service Indicator) - used for AVS sign-on
+FIELD94_SUBFIELDS = [
+    (1, "Reserved for Future Use", 1),
+    (2, "Acquirer/Issuer Indicator", 1),
+    (3, "Address Data Indicator", 1),
 ]
 
 # F48 (Additional Data - Private) subelement tag names, from the spec's
@@ -427,11 +462,17 @@ def decode_field(fnum: int, data: bytes, pos: int):
     if t == "special_3":
         return decode_field_3(data, pos)
 
+    if t == "special_28":
+        return decode_field_28(data, pos)
+
     if t == "special_43":
         return decode_field_43(data, pos)
 
     if t == "special_48":
         return decode_field_48(data, pos)
+
+    if t == "special_54":
+        return decode_field_54(data, pos)
 
     if t == "special_55":
         return decode_field_55(data, pos)
@@ -439,8 +480,47 @@ def decode_field(fnum: int, data: bytes, pos: int):
     if t == "special_90":
         return decode_field_90(data, pos)
 
+    if t == "special_94":
+        return decode_field_94(data, pos)
+
+    if t == "special_95":
+        return decode_field_95(data, pos)
+
+    if t == "special_104":
+        return decode_field_104(data, pos)
+
+    if t == "special_105":
+        return decode_field_105(data, pos)
+
+    if t == "special_106":
+        return decode_field_106(data, pos)
+
+    if t == "special_108":
+        return decode_field_108(data, pos)
+
+    if t == "special_110":
+        return decode_field_110(data, pos)
+
+    if t == "special_112":
+        return decode_field_112(data, pos)
+
+    if t == "special_117":
+        return decode_field_117(data, pos)
+
+    if t == "special_118":
+        return decode_field_118(data, pos)
+
+    if t == "special_119":
+        return decode_field_119(data, pos)
+
+    if t == "special_120":
+        return decode_field_120(data, pos)
+
     if t == "special_122":
         return decode_field_122(data, pos)
+
+    if t == "special_124":
+        return decode_field_124(data, pos)
 
     # fallback
     length, pos2 = read_len_prefix(data, pos, nbytes=2)
@@ -466,6 +546,20 @@ def decode_field_3(data: bytes, pos: int):
     return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos + n
 
 
+def decode_field_28(data: bytes, pos: int):
+    """
+    DE 28 (Amount, Transaction Fee): 9 positions
+    - Position 1: Debit/Credit Indicator (C or D)
+    - Positions 2-9: Amount (8 digits)
+    """
+    n = 9
+    body = decode_ebcdic(data[pos:pos + n])
+    indicator = body[0] if body else ""
+    amount = body[1:] if len(body) > 1 else ""
+    parts = [f"F28.1){indicator}", f"F28.2){amount}"]
+    return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos + n
+
+
 def decode_field_43(data: bytes, pos: int):
     n = 40
     body = decode_ebcdic(data[pos:pos + n])
@@ -485,6 +579,42 @@ def decode_field_90(data: bytes, pos: int):
     for sub, _name, width in FIELD90_SUBFIELDS:
         parts.append(f"F90.{sub})" + body[bpos:bpos + width])
         bpos += width
+    return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos + n
+
+
+def decode_field_94(data: bytes, pos: int):
+    """
+    DE 94 (Service Indicator): 7 positions
+    - Subfield 1: Reserved for Future Use (1 char)
+    - Subfield 2: Acquirer/Issuer Indicator (A, I, or B)
+    - Subfield 3: Address Data Indicator (0-4)
+    Positions 4-7 must contain spaces or zeros.
+    """
+    n = 7
+    body = decode_ebcdic(data[pos:pos + n])
+    parts = []
+    for sub, _name, width in FIELD94_SUBFIELDS:
+        start = (sub - 1) * width
+        parts.append(f"F94.{sub})" + body[start:start + width])
+    return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos + n
+
+
+def decode_field_95(data: bytes, pos: int):
+    """
+    DE 95 (Replacement Amounts): 42 positions
+    - Subfield 1: Actual Amount, Transaction (12 digits)
+    - Subfield 2: Actual Amount, Settlement (12 digits)
+    - Subfield 3: Actual Amount, Cardholder Billing (12 digits)
+    - Subfield 4: Zero Fill (6 digits)
+    """
+    n = 42
+    body = decode_ebcdic(data[pos:pos + n])
+    parts = [
+        f"F95.1){body[0:12]}",
+        f"F95.2){body[12:24]}",
+        f"F95.3){body[24:36]}",
+        f"F95.4){body[36:42]}",
+    ]
     return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos + n
 
 
@@ -514,8 +644,43 @@ def decode_field_48(data: bytes, pos: int):
         sublen = int(body[bpos:bpos + 2]); bpos += 2
         val = body[bpos:bpos + sublen]; bpos += sublen
         parts.append((tag, val))
-    rendered_parts = [f"F48.{t})" + v for t, v in parts]
+    
+    # Sort parts by tag numeric value (01, 22, 37, 42, 43, 61, 66, 71, 75, 92)
+    sorted_parts = sorted(parts, key=lambda x: int(x[0]) if x[0].isdigit() else 999)
+    rendered_parts = [f"F48.{t})" + v for t, v in sorted_parts]
     return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_54(data: bytes, pos: int):
+    """
+    DE 54 (Additional Amounts): LLLVAR with repeating 20-byte occurrences.
+    Each occurrence has:
+    - Subfield 1: Account Type (2 digits)
+    - Subfield 2: Amount Type (2 digits)
+    - Subfield 3: Currency Code (3 digits)
+    - Subfield 4: Debit or Credit Indicator (1 char, C or D)
+    - Subfield 5: Amount (12 digits)
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    occurrence = 1
+    while bpos + 20 <= len(body):
+        acct_type = body[bpos:bpos+2]; bpos += 2
+        amt_type = body[bpos:bpos+2]; bpos += 2
+        currency = body[bpos:bpos+3]; bpos += 3
+        indicator = body[bpos:bpos+1]; bpos += 1
+        amount = body[bpos:bpos+12]; bpos += 12
+        parts.append(f"F54.{occurrence}.1){acct_type}")
+        parts.append(f"F54.{occurrence}.2){amt_type}")
+        parts.append(f"F54.{occurrence}.3){currency}")
+        parts.append(f"F54.{occurrence}.4){indicator}")
+        parts.append(f"F54.{occurrence}.5){amount}")
+        occurrence += 1
+    if bpos < len(body):
+        parts.append(f"F54.{occurrence}){body[bpos:]}")
+    return (SUBFIELD_SEP.join(parts) + SUBFIELD_SEP if parts else ""), pos2 + length
 
 
 def decode_field_55(data: bytes, pos: int):
@@ -542,6 +707,210 @@ def decode_field_55(data: bytes, pos: int):
     else:
         rendered = SUBFIELD_SEP.join(parts) + SUBFIELD_SEP
     return rendered, pos2 + length
+
+
+def decode_field_104(data: bytes, pos: int):
+    """
+    DE 104 (Digital Payment Data): LLLVAR with TLV subelements.
+    Subelements:
+    - 001: Digital Payment Cryptogram (28 chars, base64)
+    - 002: Estimated Amount (12 digits)
+    - 003: Remote Commerce Acceptor Identifier
+    - 004: Digital Service Provider
+    - 005: Digital Authentication Data
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F104.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_105(data: bytes, pos: int):
+    """
+    DE 105 (Multi-Use Transaction Identification Data): 3-digit LLLVAR outer length,
+    then a flat TLV chain of subelements (tag=3 digits, len=3 digits, value).
+    
+    Structure:
+    - Subelement 001: Transaction Link ID (TLID) - 22 character alphanumeric value
+    - Subelement 002: Economically Related Transaction Link Identifier - 22 chars
+    - Subelement 003: Lifecycle TLID Validation - subfields
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]
+        bpos += 3
+        sublen = int(body[bpos:bpos + 3])
+        bpos += 3
+        val = body[bpos:bpos + sublen]
+        bpos += sublen
+        parts.append((tag, val))
+    
+    rendered_parts = [f"F105.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_106(data: bytes, pos: int):
+    """
+    DE 106 (Fleet Service Data): LLLVAR with TLV subelements.
+    Used for fleet card transactions (fuel items, non-fuel items, prompted data).
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F106.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_108(data: bytes, pos: int):
+    """
+    DE 108 (Additional Transaction Reference Data): LLLVAR with TLV subelements.
+    Used for Mastercard Send, Funding, and Gaming transactions.
+    Subelements: 01=Receiver/Recipient Data, 02=Sender Data, 03=Transaction Reference Data
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 2]; bpos += 2
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F108.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_110(data: bytes, pos: int):
+    """
+    DE 110 (Additional Data-2 / Encryption Data): LLLVAR raw pass-through.
+    Contains PIN encryption data or key management encryption data.
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    val = decode_ebcdic(data[pos2:pos2 + length])
+    return val, pos2 + length
+
+
+def decode_field_112(data: bytes, pos: int):
+    """
+    DE 112 (Additional Data - National Use): LLLVAR with TLV subelements.
+    Used for regional data (Brazil, Chile, Colombia, France, Greece, India, etc.)
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F112.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_117(data: bytes, pos: int):
+    """
+    DE 117 (Additional Transaction Reference Data 2): LLLVAR with TLV subelements.
+    Used for intermediary party data (Transaction Initiator, Financial Intermediary 1/2).
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F117.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_118(data: bytes, pos: int):
+    """
+    DE 118 (Additional Transaction Reference Data 3): LLLVAR with TLV subelements.
+    Used for Age Verification Request/Response.
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F118.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_119(data: bytes, pos: int):
+    """
+    DE 119 (Additional Data: Private Use 2): LLLVAR with TLV subelements.
+    Used for MDES service indicators (Clearing Indicator, Acquirer Reference ID).
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    body = decode_ebcdic(data[pos2:pos2 + length])
+    parts = []
+    bpos = 0
+    while bpos < len(body):
+        if bpos + 6 > len(body):
+            parts.append((body[bpos:], "<truncated>"))
+            break
+        tag = body[bpos:bpos + 3]; bpos += 3
+        sublen = int(body[bpos:bpos + 3]); bpos += 3
+        val = body[bpos:bpos + sublen]; bpos += sublen
+        parts.append((tag, val))
+    rendered_parts = [f"F119.{t})" + v for t, v in parts]
+    return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
+
+
+def decode_field_120(data: bytes, pos: int):
+    """
+    DE 120 (Record Data): LLLVAR raw pass-through.
+    Used for AVS (Address Verification Service) data and file maintenance.
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    val = decode_ebcdic(data[pos2:pos2 + length])
+    return val, pos2 + length
 
 
 def decode_field_122(data: bytes, pos: int):
@@ -571,6 +940,16 @@ def decode_field_122(data: bytes, pos: int):
     return (SUBFIELD_SEP.join(rendered_parts) + SUBFIELD_SEP if rendered_parts else ""), pos2 + length
 
 
+def decode_field_124(data: bytes, pos: int):
+    """
+    DE 124 (Member-Defined Data): LLLVAR raw pass-through.
+    Used for MDES tokenization, Mastercard Send, and Brazil Maestro data.
+    """
+    length, pos2 = read_len_prefix(data, pos, nbytes=3)
+    val = decode_ebcdic(data[pos2:pos2 + length])
+    return val, pos2 + length
+
+
 # ---------------------------------------------------------------------------
 # Description dictionaries
 # ---------------------------------------------------------------------------
@@ -598,6 +977,8 @@ FIELD_DESCRIPTIONS = {
     19: "Acquiring Institution Country Code",
     22: "Point of Service (POS) Entry Mode",
     23: "Card Sequence Number",
+    26: "POS PIN Capture Code",
+    28: "Amount, Transaction Fee",
     32: "Acquiring Institution ID Code",
     33: "Forwarding Institution ID Code",
     35: "Track 2 Data",
@@ -607,21 +988,47 @@ FIELD_DESCRIPTIONS = {
     41: "Card Acceptor Terminal ID",
     42: "Card Acceptor ID Code",
     43: "Card Acceptor Name/Location",
+    44: "Additional Response Data",
     48: "Additional Data - Private Use",
     49: "Currency Code, Transaction",
     50: "Currency Code, Reconciliation",
     51: "Currency Code, Cardholder Billing",
     52: "PIN Data",
+    54: "Additional Amounts",
     55: "ICC System Related Data (EMV)",
+    56: "Payment Account Data (PAR)",
     61: "Point-of-Service (POS) Data",
+    62: "Intermediate Network Facility (INF) Data",
     63: "Private / Network-Assigned Reference",
+    67: "Extended Payment Code",
     90: "Original Data Elements",
+    94: "Service Indicator",
+    95: "Replacement Amounts",
+    96: "Message Security Code",
+    102: "Account ID 1",
+    103: "Account ID 2",
+    104: "Digital Payment Data",
+    105: "Multi-Use Transaction Identification Data",
+    106: "Fleet Service Data",
+    108: "Additional Transaction Reference Data",
+    110: "Additional Data-2 / Encryption Data",
+    112: "Additional Data (National Use)",
+    117: "Additional Transaction Reference Data 2",
+    118: "Additional Transaction Reference Data 3",
+    119: "Additional Data: Private Use 2",
+    120: "Record Data",
+    121: "Authorizing Agent ID Code",
     122: "Additional Private Use Data - National",
+    123: "Receipt Free Text",
+    124: "Member-Defined Data",
+    125: "New PIN Data",
+    127: "Private Data",
 }
 
 FIELD3_DESCRIPTIONS = {sub: name for sub, name, _ in FIELD3_SUBFIELDS}
 FIELD43_DESCRIPTIONS = {sub: name for sub, name, _ in FIELD43_SUBFIELDS}
 FIELD90_DESCRIPTIONS = {sub: name for sub, name, _ in FIELD90_SUBFIELDS}
+FIELD94_DESCRIPTIONS = {sub: name for sub, name, _ in FIELD94_SUBFIELDS}
 
 
 def describe_label(label: str) -> str:
@@ -647,13 +1054,36 @@ def describe_label(label: str) -> str:
         sub = int(parts[1])
         return f"{base_desc} - Subfield {sub}: {FIELD3_DESCRIPTIONS.get(sub, 'Reserved')}"
 
+    if fnum == 28:
+        sub = int(parts[1])
+        names = {1: "Debit/Credit Indicator", 2: "Amount"}
+        return f"{base_desc} - Subfield {sub}: {names.get(sub, 'Reserved')}"
+
     if fnum == 43:
         sub = int(parts[1])
         return f"{base_desc} - Subfield {sub}: {FIELD43_DESCRIPTIONS.get(sub, 'Reserved')}"
 
+    if fnum == 54:
+        sub_parts = parts[1].split(".")
+        if len(sub_parts) == 2:
+            occ = sub_parts[0]
+            sf = sub_parts[1]
+            names = {1: "Account Type", 2: "Amount Type", 3: "Currency Code", 4: "Debit/Credit Indicator", 5: "Amount"}
+            return f"{base_desc} - Occurrence {occ}, Subfield {sf}: {names.get(int(sf), 'Reserved')}"
+        return f"{base_desc} - Occurrence {parts[1]}"
+
     if fnum == 90:
         sub = int(parts[1])
         return f"{base_desc} - Subfield {sub}: {FIELD90_DESCRIPTIONS.get(sub, 'Reserved')}"
+
+    if fnum == 94:
+        sub = int(parts[1])
+        return f"{base_desc} - Subfield {sub}: {FIELD94_DESCRIPTIONS.get(sub, 'Reserved')}"
+
+    if fnum == 95:
+        sub = int(parts[1])
+        names = {1: "Actual Amount, Transaction", 2: "Actual Amount, Settlement", 3: "Actual Amount, Cardholder Billing", 4: "Zero Fill"}
+        return f"{base_desc} - Subfield {sub}: {names.get(sub, 'Reserved')}"
 
     if fnum == 48:
         tag = parts[1]
@@ -665,6 +1095,30 @@ def describe_label(label: str) -> str:
     if fnum == 55:
         tag = parts[1].lower()
         return f"{base_desc} - {EMV_TAG_NAMES.get(tag, 'Proprietary/unrecognized EMV tag ' + tag.upper())}"
+
+    if fnum == 104:
+        tag = parts[1]
+        names = {"001": "Digital Payment Cryptogram", "002": "Estimated Amount", 
+                 "003": "Remote Commerce Acceptor Identifier", "004": "Digital Service Provider",
+                 "005": "Digital Authentication Data"}
+        return f"{base_desc} - Subelement {tag}: {names.get(tag, 'Unrecognized')}"
+
+    if fnum == 105:
+        tag = parts[1]
+        names = {"001": "Transaction Link ID (TLID)", "002": "Economically Related TLID", 
+                 "003": "Lifecycle TLID Validation"}
+        return f"{base_desc} - Subelement {tag}: {names.get(tag, 'Unrecognized')}"
+
+    if fnum == 106:
+        tag = parts[1]
+        names = {"001": "Fleet Prompted Data", "002": "Merchant Fleet Spend Control Capability",
+                 "003": "Fleet Spend Control Override Items", "004": "Fleet Fuel Information",
+                 "005": "Fleet Non-Fuel Information"}
+        return f"{base_desc} - Subelement {tag}: {names.get(tag, 'Unrecognized')}"
+
+    if fnum == 112:
+        tag = parts[1]
+        return f"{base_desc} - Subelement {tag} (Regional/National Use)"
 
     if fnum == 122:
         tag = parts[1]
@@ -686,7 +1140,7 @@ def _split_compact_field(fnum: int, rendered: str, raw_hex: str):
     fields), return a list of (label, value) row tuples.
     """
     rows = []
-    if fnum in (3, 43, 48, 55, 90, 122):
+    if fnum in (3, 28, 43, 48, 54, 55, 90, 94, 95, 104, 105, 106, 108, 112, 117, 118, 119, 122):
         groups = [g for g in rendered.split(SUBFIELD_SEP) if g]
         for g in groups:
             if ")" in g:
@@ -731,7 +1185,7 @@ def parse_message_full(raw_hex: str, debug: bool = False):
         for label, value in _split_compact_field(fnum, rendered, raw_hex_field):
             rows.append((label, describe_label(label), raw_hex_field, value))
 
-        if fnum in (3, 43, 48, 55, 90, 122):
+        if fnum in (3, 28, 43, 48, 54, 55, 90, 94, 95, 104, 105, 106, 108, 112, 117, 118, 119, 122):
             out_parts.append(rendered)  # already contains F{n}.{sub}) formatting
         else:
             out_parts.append(f"F{fnum})" + rendered)

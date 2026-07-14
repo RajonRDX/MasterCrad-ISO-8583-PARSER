@@ -45,7 +45,7 @@ DE48_SUBELEMENT_GLOSSARY = {
     "36": "Additional Visa Request Data [Variable]",
     "37": "Additional Merchant Data [Variable]",
     "38": "Account Category [Fixed, 1 char]",
-    "39": "Account Data Compromise Information [Fixed, 1 char]",
+    "39": "Account Data Compromise Information [Fixed, 30 char]",
     "40": "E-Commerce Merchant/Cardholder Certificate Serial Number [Variable]",
     "41": "Electronic Commerce Certificate Qualifying Information [Variable]",
     "42": "Electronic Commerce Indicators [Fixed, 3 char]",
@@ -53,7 +53,7 @@ DE48_SUBELEMENT_GLOSSARY = {
     "44": "3-D Secure Electronic Commerce Transaction Identifier (XID) [Variable]",
     "45": "3-D Secure Electronic Commerce Transaction Response Code [Fixed, 1 char]",
     "46": "Product ID (Visa Only) [Fixed, 2 char]",
-    "47": "Mastercard Payment Gateway Transaction Indicator [Fixed, 1 char]",
+    "47": "Mastercard Payment Gateway Transaction Indicator [Fixed, 8 char]",
     "48": "Digital Commerce Solutions Indicators [Variable]",
     "49": "Time Validation Information [Fixed, 15 char]",
     "50": "Embedded Interchange Data [Variable]",
@@ -222,15 +222,18 @@ DE48_VALUE_TABLES = {
         "A": "Approve cardholder request for device",
         "D": "Decline cardholder request for device"
     },
+    "37.SERVICE_ROLES": {
+        "90000000001": "Payment Facilitator",
+        "90000000003": "Staged Wallet",
+        "90000000004": "Mastercard Defined Domestic Programs",
+        "90000000005": "Independent Sales Organization (ISO)",
+        "90000000007": "Mastercard Defined International Programs"
+    },
     "38": {
         "A": "Consumer Card Profile", 
         "B": "Commercial Card Profile", 
         "C": "Corporate Fleet Profile",
         "Z": "Previously participated in Enhanced Value/Product Graduation/High Value"
-    },
-    "39": {
-        "0": "No active compromise monitoring rule triggered", 
-        "1": "Card is part of a high-risk data breach list; validation strictness escalated"
     },
     "42.POS1": {
         "0": "Reserved for existing Mastercard Europe/Visa definitions",
@@ -253,6 +256,12 @@ DE48_VALUE_TABLES = {
         "5": "Reserved",
         "6": "Risk Based Decisioning / DSRP cryptogram",
         "7": "Merchant-initiated transactions",
+    },
+    "42.DOWNGRADE_REASON": {
+        "0": "Missing Universal Cardholder Authentication Field (UCAF)",
+        "1": "Incorrect AAV leading indicator in UCAF",
+        "2": "Incorrect Security Level Indicator",
+        "3": "X-Code Processing"
     },
     "45": {
         "0": "Verification Successful", 
@@ -422,7 +431,24 @@ DE48_VALUE_TABLES = {
         "6": "EMV 3-D Secure Version 2.6",
         "7": "EMV 3-D Secure Version 2.7",
         "8": "EMV 3-D Secure Version 2.8",
-        "9": "EMV 3-D Secure Version 2.9"
+        "9": "EMV 3-D Secure Version 2.9",
+        "01": "EMV 3-D Secure Version 2.1",
+        "02": "EMV 3-D Secure Version 2.2",
+        "03": "EMV 3-D Secure Version 2.3",
+        "04": "EMV 3-D Secure Version 2.4",
+        "05": "EMV 3-D Secure Version 2.5",
+        "06": "EMV 3-D Secure Version 2.6",
+        "07": "EMV 3-D Secure Version 2.7",
+        "08": "EMV 3-D Secure Version 2.8",
+        "09": "EMV 3-D Secure Version 2.9"
+    },
+    "75.SUB1": {
+        "001": "Least likely fraudulent transaction",
+        "998": "Most likely fraudulent transaction"
+    },
+    "75.SUB2": {
+        "00": "Successful",
+        "01": "Not Enough Data (Dormant or New Card)"
     },
     "76": {
         "C": "Mastercard only participant (not Mastercard Electronic)",
@@ -604,7 +630,6 @@ DE48_VALUE_TABLES = {
         "PRYCTA": "Installment payment transaction within Paraguay",
         "URYCTA": "Installment payment transaction within Uruguay"
     },
-    "96": {},
     "97": {
         "D": "Visa established limits",
         "B": "Visa established limits",
@@ -995,15 +1020,16 @@ MC_ONE_SERVICE_PATTERNS = [
 def decode_de48_subelement(se_tag: str, value: str) -> str:
     """
     Decodes structural subelement layouts and positional parameters inside Data Element 48.
-    Does not crash on validation discrepancies; instead records lightweight tracking markers.
+    Handles variable-length formats, spaces, and malformed inputs gracefully.
     """
+    # Strip leading/trailing whitespace
     clean_val = value.strip()
     tag_name = DE48_SUBELEMENT_GLOSSARY.get(se_tag, f"Subelement {se_tag}")
     validation_err = ""
     
     # Check simple flat code enumerations first
-    if se_tag in DE48_VALUE_TABLES and se_tag not in ("21", "22", "24", "42", "48", "61", "62", "71", "78"):
-        meaning = DE48_VALUE_TABLES[se_tag].get(clean_val, "Value recognized but description unassigned")
+    if se_tag in DE48_VALUE_TABLES and se_tag not in ("21", "22", "24", "37", "42", "48", "61", "62", "66", "71", "75", "78"):
+        meaning = DE48_VALUE_TABLES[se_tag].get(clean_val, f"Value '{clean_val}' recognized but description unassigned")
         return f"{tag_name}: {meaning}"
 
     # Advanced Multi-Position Layouts Logic
@@ -1035,29 +1061,30 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
                 result_parts.append(f"Additional: {remaining}")
             return f"{tag_name} -> {' | '.join(result_parts)}{validation_err}"
         
-        if len(clean_val) > pos:
-            val = clean_val[pos]
-            desc = DE48_VALUE_TABLES["22.POS1"].get(val, f"Unknown Framework Type: {val}")
-            result_parts.append(f"Type: {desc}")
-            pos += 1
+        # Parse CIT/MIT indicators (2 chars each)
+        if len(clean_val) >= 2:
+            val1 = clean_val[pos:pos+2]
+            pos += 2
+            desc1 = DE48_VALUE_TABLES["22.POS1"].get(val1, f"Unknown Framework Type: {val1}")
+            result_parts.append(f"Type: {desc1}")
         
         if len(clean_val) > pos:
-            val = clean_val[pos]
-            desc = DE48_VALUE_TABLES["22.POS2"].get(val, f"Unknown Sequence: {val}")
-            result_parts.append(f"Sequence: {desc}")
+            val2 = clean_val[pos]
             pos += 1
+            desc2 = DE48_VALUE_TABLES["22.POS2"].get(val2, f"Unknown Sequence: {val2}")
+            result_parts.append(f"Sequence: {desc2}")
         
         if len(clean_val) > pos:
-            val = clean_val[pos]
-            if val == "1":
+            val3 = clean_val[pos]
+            pos += 1
+            if val3 == "1":
                 result_parts.append("✓ Merchant supports single tap")
-            pos += 1
         
         if len(clean_val) > pos:
-            val = clean_val[pos]
-            if val == "1":
-                result_parts.append("Issuer requested PIN in Single Tap mode")
+            val4 = clean_val[pos]
             pos += 1
+            if val4 == "1":
+                result_parts.append("Issuer requested PIN in Single Tap mode")
         
         if len(clean_val) > pos:
             remaining = clean_val[pos:]
@@ -1094,7 +1121,6 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         if len(clean_val) >= pos + 3:
             product_code = clean_val[pos:pos+3]
             pos += 3
-            # Product code values are variable - just show the code
             if product_code != "XXX":
                 result_parts.append(f"Product Code: {product_code}")
         
@@ -1136,15 +1162,77 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         meaning = DE48_VALUE_TABLES["26"].get(clean_val[:3], f"Unknown Wallet ID: {clean_val[:3]}")
         return f"{tag_name} -> {meaning}{validation_err}"
 
+    if se_tag == "32":
+        if len(clean_val) != 6:
+            validation_err = " [Warning: Expected length exactly 6]"
+        return f"{tag_name}: `{clean_val}`{validation_err}"
+
+    if se_tag == "37":
+        # Parse Additional Merchant Data
+        if len(clean_val) >= 11:
+            # Try to parse as Service Provider ID (11 digits) + Role (11 digits)
+            service_id = clean_val[:11]
+            remaining = clean_val[11:]
+            
+            result_parts = [f"Service Provider ID: {service_id}"]
+            
+            if len(remaining) >= 11:
+                role = remaining[:11]
+                remaining = remaining[11:]
+                role_desc = DE48_VALUE_TABLES["37.SERVICE_ROLES"].get(role, f"Unknown Role: {role}")
+                result_parts.append(f"Role: {role} ({role_desc})")
+                
+                if len(remaining) >= 15:
+                    seller_id = remaining[:15]
+                    remaining = remaining[15:]
+                    if seller_id.strip():
+                        result_parts.append(f"Seller ID: {seller_id}")
+                    
+                    if len(remaining) >= 3:
+                        merchant_country = remaining[:3]
+                        remaining = remaining[3:]
+                        if merchant_country.strip():
+                            result_parts.append(f"Merchant Country: {merchant_country}")
+                    
+                    if len(remaining) >= 11:
+                        gateway_id = remaining[:11]
+                        remaining = remaining[11:]
+                        if gateway_id.strip():
+                            result_parts.append(f"Payment Gateway ID: {gateway_id}")
+                    
+                    if remaining.strip():
+                        result_parts.append(f"Additional: {remaining}")
+                
+            return f"{tag_name} -> {' | '.join(result_parts)}"
+        return f"{tag_name}: `{clean_val}`"
+
     if se_tag == "42":
-        if len(clean_val) != 3:
-            validation_err = " [Warning: Expected length exactly 3]"
-        if len(clean_val) >= 3:
-            p1 = DE48_VALUE_TABLES["42.POS1"].get(clean_val[0], "Unknown Protocol")
-            p2 = DE48_VALUE_TABLES["42.POS2"].get(clean_val[1], "Unknown Auth Status")
-            p3 = DE48_VALUE_TABLES["42.POS3"].get(clean_val[2], "Unknown UCAF Configuration")
-            return f"{tag_name} -> Protocol: {p1} | Status: {p2} | UCAF: {p3}{validation_err}"
-        return f"{tag_name}: Raw Matrix `{clean_val}`{validation_err}"
+        if len(clean_val) < 3:
+            validation_err = " [Warning: Expected at least 3 characters]"
+            return f"{tag_name}: Raw Matrix `{clean_val}`{validation_err}"
+        
+        # Parse the first 3 characters
+        p1 = DE48_VALUE_TABLES["42.POS1"].get(clean_val[0], f"Unknown Protocol: {clean_val[0]}")
+        p2 = DE48_VALUE_TABLES["42.POS2"].get(clean_val[1], f"Unknown Auth Status: {clean_val[1]}")
+        p3 = DE48_VALUE_TABLES["42.POS3"].get(clean_val[2], f"Unknown UCAF Configuration: {clean_val[2]}")
+        
+        result_parts = [f"Protocol: {p1}", f"Auth: {p2}", f"UCAF: {p3}"]
+        
+        # If there are extra characters (positions 4+), they represent Original SLI and UCAF Downgrade Reason
+        if len(clean_val) > 3:
+            extra = clean_val[3:]
+            if len(extra) >= 6:
+                original_sli = extra[:3]
+                downgrade_reason = extra[3:6]
+                reason_desc = DE48_VALUE_TABLES["42.DOWNGRADE_REASON"].get(downgrade_reason, f"Unknown: {downgrade_reason}")
+                result_parts.append(f"Original SLI: {original_sli}")
+                result_parts.append(f"Downgrade Reason: {reason_desc}")
+                if len(extra) > 6:
+                    result_parts.append(f"Additional: {extra[6:]}")
+            else:
+                result_parts.append(f"Additional Data: {extra}")
+        
+        return f"{tag_name} -> {' | '.join(result_parts)}{validation_err}"
 
     if se_tag == "43":
         if len(clean_val) == 28:
@@ -1157,7 +1245,7 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         elif len(clean_val) == 21:
             return f"{tag_name} -> 3-D Secure (Visa/Amex): `{clean_val}`"
         else:
-            return f"{tag_name} -> UCAF Data: `{clean_val}`"
+            return f"{tag_name}: `{clean_val}`"
     
     if se_tag == "48":
         if len(clean_val) >= 1:
@@ -1253,8 +1341,13 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
 
     if se_tag == "66":
         if len(clean_val) >= 2:
-            protocol = clean_val[:2]
-            ds_trans_id = clean_val[2:]
+            # Protocol could be 1 or 2 digits
+            if clean_val[0] == '0':
+                protocol = clean_val[:2]
+                ds_trans_id = clean_val[2:]
+            else:
+                protocol = clean_val[:1]
+                ds_trans_id = clean_val[1:]
             proto_desc = DE48_VALUE_TABLES["66.SUB1"].get(protocol, f"Unknown Protocol: {protocol}")
             return f"{tag_name} -> Protocol: {protocol} ({proto_desc}) | DS Transaction ID: `{ds_trans_id}`"
         return f"{tag_name}: `{clean_val}`"
@@ -1270,12 +1363,23 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         return f"{tag_name} -> Financial Account: `{clean_val}`"
 
     if se_tag == "71":
-        if len(clean_val) % 3 != 0 or len(clean_val) == 0:
-            validation_err = " [Warning: Subelement 71 layout must be a repeating series of 3-char blocks]"
+        # Remove all spaces from the value before parsing
+        clean_val_no_spaces = clean_val.replace(" ", "")
+        
+        if len(clean_val_no_spaces) == 0:
+            return f"{tag_name}: No data present"
+            
+        # Ensure the length is a multiple of 3
+        if len(clean_val_no_spaces) % 3 != 0:
+            validation_err = f" [Warning: Subelement 71 layout must be a repeating series of 3-char blocks. Raw length: {len(clean_val_no_spaces)}]"
+            # Attempt to parse what we can
+            clean_val_no_spaces = clean_val_no_spaces[: (len(clean_val_no_spaces) // 3) * 3]
+            if not clean_val_no_spaces:
+                return f"{tag_name}: Malformed data - cannot parse `{clean_val}`{validation_err}"
         
         parsed_services = []
-        for i in range(0, len(clean_val), 3):
-            block = clean_val[i:i+3]
+        for i in range(0, len(clean_val_no_spaces), 3):
+            block = clean_val_no_spaces[i:i+3]
             if len(block) < 3:
                 parsed_services.append(f"Malformed block fragment: `{block}`")
                 continue
@@ -1284,6 +1388,7 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
             res_code = block[2]
             svc_desc = DE48_VALUE_TABLES["71.SERVICES"].get(svc_code, f"Unknown On-behalf Service '{svc_code}'")
             
+            # Look up result description based on service code
             if svc_code == "01":
                 res_desc = DE48_VALUE_TABLES["71.OBS01"].get(res_code, f"Unknown Code '{res_code}'")
             elif svc_code in ("02", "03", "51"):
@@ -1327,7 +1432,7 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
             else:
                 res_desc = f"Result Flag '{res_code}'"
                 
-            parsed_services.append(f"[{svc_desc} -> Result: {res_desc}]")
+            parsed_services.append(f"[{svc_desc} -> {res_desc}]")
             
         services_summary = " | ".join(parsed_services)
         return f"{tag_name} -> {services_summary}{validation_err}"
@@ -1349,10 +1454,54 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         return f"{tag_name}: `{clean_val}`"
 
     if se_tag == "75":
-        if len(clean_val) >= 1:
-            desc = DE48_VALUE_TABLES["75"].get(clean_val[0], f"Unknown Status: {clean_val[0]}")
-            return f"{tag_name} -> {desc}"
-        return f"{tag_name}: `{clean_val}`"
+        # Parse Fraud Scoring Data
+        if len(clean_val) < 5:
+            validation_err = " [Warning: Expected at least 5 characters (Score + Reason Code)]"
+            return f"{tag_name}: `{clean_val}`{validation_err}"
+        
+        pos = 0
+        result_parts = []
+        
+        # Subfield 1: Fraud Score (3 chars)
+        if len(clean_val) >= pos + 3:
+            fraud_score = clean_val[pos:pos+3]
+            pos += 3
+            score_desc = DE48_VALUE_TABLES["75.SUB1"].get(fraud_score, f"Score value: {fraud_score}")
+            result_parts.append(f"Fraud Score: {fraud_score} ({score_desc})")
+        
+        # Subfield 2: Reason Code (2 chars)
+        if len(clean_val) >= pos + 2:
+            reason_code = clean_val[pos:pos+2]
+            pos += 2
+            reason_desc = DE48_VALUE_TABLES["75.SUB2"].get(reason_code, f"Reason Code: {reason_code}")
+            result_parts.append(f"Reason Code: {reason_code} ({reason_desc})")
+        
+        # Subfield 3: Model Score (3 chars) - optional
+        if len(clean_val) >= pos + 3:
+            model_score = clean_val[pos:pos+3]
+            pos += 3
+            result_parts.append(f"Model Score: {model_score}")
+        
+        # Subfield 4: Model Reason Code (2 chars) - optional
+        if len(clean_val) >= pos + 2:
+            model_reason = clean_val[pos:pos+2]
+            pos += 2
+            result_parts.append(f"Model Reason Code: {model_reason}")
+        
+        # Subfield 5: Reserved for Future Use (2 chars) - optional
+        if len(clean_val) >= pos + 2:
+            reserved = clean_val[pos:pos+2]
+            pos += 2
+            if reserved.strip():
+                result_parts.append(f"Reserved: {reserved}")
+        
+        # Any remaining data
+        if len(clean_val) > pos:
+            remaining = clean_val[pos:]
+            if remaining.strip():
+                result_parts.append(f"Additional: {remaining}")
+        
+        return f"{tag_name} -> {' | '.join(result_parts)}{validation_err}"
 
     if se_tag == "76":
         meaning = DE48_VALUE_TABLES["76"].get(clean_val, f"Unknown Electronic Acceptance: {clean_val}")
@@ -1496,3 +1645,30 @@ def decode_de48_subelement(se_tag: str, value: str) -> str:
         return f"{tag_name} -> Vehicle Number: `{clean_val}`"
         
     return f"{tag_name}: `{clean_val}`"
+
+
+def parse_all_subelements(parsed_data: dict) -> str:
+    """
+    Parse all DE48 subelements and return them in ascending numeric order.
+    
+    Args:
+        parsed_data: Dictionary with subelement tags as keys and values as values
+        
+    Returns:
+        Formatted string with all subelements in ascending order
+    """
+    if not parsed_data:
+        return "No DE48 subelements present"
+    
+    result = []
+    # Sort by numeric value - convert to int for proper sorting
+    # This ensures 01, 32, 37, 42, 43, 61, 66, 71, 77, 92 order
+    for tag in sorted(parsed_data.keys(), key=lambda x: int(x) if str(x).isdigit() else 999):
+        value = parsed_data[tag]
+        decoded = decode_de48_subelement(tag, value)
+        # Clean up the decoded string - remove "F48." prefix if present
+        if decoded.startswith("F48."):
+            decoded = decoded[4:]
+        result.append(f"F48.{tag}: {decoded}")
+    
+    return "\n".join(result)
